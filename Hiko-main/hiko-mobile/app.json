@@ -41,9 +41,12 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Hiko to use your location for GPS tracking during hikes."
+          "locationAlwaysAndWhenInUsePermission": "Allow Hiko to use your location for GPS tracking during hikes.",
+          "isAndroidBackgroundLocationEnabled": true
         }
-      ]
+      ],
+      "react-native-mmkv",
+      "react-native-maplibre-gl"
     ],
     "scheme": "hiko",
     "extra": {

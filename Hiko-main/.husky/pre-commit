@@ -1,0 +1,4 @@
+#!/bin/sh
+
+npm --prefix hiko-mobile run lint
+npm --prefix hiko-mobile run test -- --run

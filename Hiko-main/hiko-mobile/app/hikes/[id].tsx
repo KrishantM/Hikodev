@@ -1,99 +1,185 @@
-import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
-import { hikeService } from "@/lib/services/hike-service";
-import { weatherService } from "@/lib/services/weather-service";
-import { docService } from "@/lib/services/doc-service";
+import { useMemo } from "react";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+import { HikeMap } from "@/lib/map";
+import { useAuth } from "@/lib/auth/client";
+import { useHike, useHikeRouteGeoJson, useTrackAlerts, useUserProfile, useWeather } from "@/lib/hooks";
+import { StatusChip } from "@/components/StatusChip";
+import { setSavedHike } from "@/lib/services/users";
 
 export default function HikeDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
 
-  const { data: hike, isLoading } = useQuery({
-    queryKey: ["hike", id],
-    queryFn: () => hikeService.getHike(id!),
-    enabled: !!id,
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { data: hike, isLoading } = useHike(id);
+  const { data: geojson } = useHikeRouteGeoJson(id);
+  const { data: weather } = useWeather(id, hike ? hike.start : undefined);
+  const { data: alerts } = useTrackAlerts(hike?.id);
+  const { data: profile } = useUserProfile(user?.uid);
+
+  const saved = useMemo(() => {
+    if (!hike) return false;
+    return profile?.savedHikes?.includes(hike.id) ?? false;
+  }, [profile?.savedHikes, hike]);
+
+  const toggleSave = useMutation({
+    mutationFn: (shouldSave: boolean) => {
+      if (!user || !hike) return Promise.resolve();
+      return setSavedHike(user.uid, hike.id, shouldSave);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-profile", user?.uid] });
+    },
   });
 
-  const { data: weather } = useQuery({
-    queryKey: ["weather", id],
-    queryFn: () =>
-      hike
-        ? weatherService.getForecast(
-            id!,
-            hike.startLatLng.lat,
-            hike.startLatLng.lng
-          )
-        : Promise.resolve([]),
-    enabled: !!hike,
-  });
-
-  const { data: docStatus } = useQuery({
-    queryKey: ["docStatus", hike?.docTrackId],
-    queryFn: () =>
-      hike?.docTrackId
-        ? docService.getTrackStatus(hike.docTrackId)
-        : Promise.resolve(null),
-    enabled: !!hike?.docTrackId,
-  });
+  const weatherDays = useMemo(() => weather ?? [], [weather]);
+  const topAlerts = useMemo(() => (alerts || []).slice(0, 3), [alerts]);
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <Text>Loading hike details...</Text>
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#02685A" />
       </View>
     );
   }
 
   if (!hike) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.error}>Hike not found</Text>
+      <View style={styles.centered}>
+        <Ionicons name="trail-sign" size={40} color="#9E9E9E" />
+        <Text style={styles.errorText}>We couldn't find that hike.</Text>
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{hike.name}</Text>
-      <Text style={styles.region}>{hike.region}</Text>
-      
-      <View style={styles.infoRow}>
-        <Text style={styles.info}>{hike.distanceKm} km</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>{hike.name}</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.saveButton, saved && styles.saveButtonActive]}
+            onPress={() => toggleSave.mutate(!saved)}
+            disabled={toggleSave.isPending || !user}
+          >
+            <Ionicons
+              name={saved ? "bookmark" : "bookmark-outline"}
+              size={18}
+              color={saved ? "#fff" : "#02685A"}
+            />
+          </TouchableOpacity>
+          <StatusChip status={hike.statusSummary ?? "unknown"} />
+        </View>
+      </View>
+      <Text style={styles.subtitle}>{hike.region}</Text>
+      <View style={styles.metaRow}>
+        <View style={styles.metaPill}>
+          <Ionicons name="map-outline" size={16} color="#02685A" />
+          <Text style={styles.metaText}>{hike.distanceKm.toFixed(1)} km</Text>
+        </View>
         {hike.elevationGainM && (
-          <Text style={styles.info}>+{hike.elevationGainM}m</Text>
+          <View style={styles.metaPill}>
+            <Ionicons name="trending-up" size={16} color="#02685A" />
+            <Text style={styles.metaText}>+{hike.elevationGainM} m</Text>
+          </View>
         )}
-        <Text style={styles.difficulty}>
-          {hike.difficulty.charAt(0).toUpperCase() + hike.difficulty.slice(1)}
-        </Text>
+        {hike.difficulty && (
+          <View style={styles.metaPill}>
+            <Ionicons name="barbell-outline" size={16} color="#02685A" />
+            <Text style={styles.metaText}>{hike.difficulty}</Text>
+          </View>
+        )}
+        <View style={styles.metaPill}>
+          <Ionicons
+            name={hike.overnight ? "moon" : "sunny"}
+            size={16}
+            color="#02685A"
+          />
+          <Text style={styles.metaText}>{hike.overnight ? "Overnight" : "Day"}</Text>
+        </View>
       </View>
 
-      {weather && weather.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Weather Forecast</Text>
-          {weather.map((forecast, index) => (
-            <View key={index} style={styles.weatherItem}>
-              <Text style={styles.weatherDate}>
-                {index === 0
-                  ? "Today"
-                  : index === 1
-                  ? "Tomorrow"
-                  : forecast.date.toLocaleDateString()}
+      <HikeMap coordinates={hike.start} geojson={geojson ?? undefined} />
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>3-day forecast</Text>
+        {weatherDays.length === 0 ? (
+          <Text style={styles.emptyCopy}>Weather data will appear after the next sync.</Text>
+        ) : (
+          weatherDays.map((day) => (
+            <View key={day.date} style={styles.weatherCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.weatherDate}>{new Date(day.date).toDateString()}</Text>
+                <Text style={styles.weatherSummary}>{day.summary}</Text>
+              </View>
+              <View style={styles.weatherMeta}>
+                <Text style={styles.weatherTemp}>{Math.round(day.tempMax)}° / {Math.round(day.tempMin)}°</Text>
+                {day.windKph ? (
+                  <Text style={styles.weatherMetaText}>{Math.round(day.windKph)} km/h</Text>
+                ) : null}
+                {day.precipMm ? (
+                  <Text style={styles.weatherMetaText}>{day.precipMm.toFixed(1)} mm</Text>
+                ) : null}
+                <Text style={styles.weatherProvider}>via {day.provider}</Text>
+              </View>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>DOC alerts</Text>
+        {topAlerts.length === 0 ? (
+          <Text style={styles.emptyCopy}>No recent alerts for this track.</Text>
+        ) : (
+          topAlerts.map((alert) => (
+            <View key={alert.id} style={styles.alertCard}>
+              <Text style={styles.alertTitle}>{alert.title}</Text>
+              <Text style={styles.alertBody}>{alert.body}</Text>
+              <Text style={styles.alertMeta}>
+                Updated {alert.updatedAt.toLocaleDateString()} • {alert.severity ?? "info"}
               </Text>
-              <Text style={styles.weatherTemp}>
-                {Math.round(forecast.tempMax)}° / {Math.round(forecast.tempMin)}°
-              </Text>
-              <Text style={styles.weatherDesc}>{forecast.description}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Tags & features</Text>
+        <View style={styles.tagRow}>
+          {hike.tags.map((tag) => (
+            <View key={tag} style={styles.tagChip}>
+              <Text style={styles.tagText}>{tag}</Text>
+            </View>
+          ))}
+          {hike.features.map((feature) => (
+            <View key={feature} style={styles.tagChipMuted}>
+              <Text style={styles.tagTextMuted}>{feature}</Text>
             </View>
           ))}
         </View>
-      )}
+      </View>
 
-      {docStatus && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Track Status</Text>
-          <Text style={styles.statusText}>{docStatus.summary}</Text>
-        </View>
-      )}
+      <TouchableOpacity
+        style={styles.primaryButton}
+        onPress={() => router.push({ pathname: "/plan", params: { hikeId: hike.id } })}
+      >
+        <Ionicons name="trail-sign" size={18} color="#fff" />
+        <Text style={styles.primaryButtonText}>Plan this hike</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -101,76 +187,182 @@ export default function HikeDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#FAFAFA",
   },
   content: {
     padding: 16,
+    gap: 16,
+    paddingBottom: 40,
+  },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
   },
   title: {
     fontSize: 28,
-    fontWeight: "bold",
-    color: "#02685A",
-    marginBottom: 8,
+    fontWeight: "700",
+    color: "#024C3F",
+    flex: 1,
   },
-  region: {
+  subtitle: {
     fontSize: 16,
-    color: "#666",
-    marginBottom: 16,
+    color: "#607D8B",
   },
-  infoRow: {
+  header: {
     flexDirection: "row",
-    gap: 16,
-    marginBottom: 24,
+    alignItems: "center",
+    gap: 12,
   },
-  info: {
-    fontSize: 16,
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  saveButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#02685A",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+  },
+  saveButtonActive: {
+    backgroundColor: "#02685A",
+  },
+  metaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  metaPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#E0F2F1",
+  },
+  metaText: {
     color: "#02685A",
-    fontWeight: "500",
-  },
-  difficulty: {
-    fontSize: 16,
-    color: "#666",
+    fontWeight: "600",
   },
   section: {
-    marginBottom: 24,
+    gap: 12,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#02685A",
-    marginBottom: 12,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#024C3F",
   },
-  weatherItem: {
-    padding: 12,
-    backgroundColor: "#F5F1E8",
-    borderRadius: 8,
-    marginBottom: 8,
+  emptyCopy: {
+    color: "#607D8B",
+    fontStyle: "italic",
+  },
+  weatherCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 2,
   },
   weatherDate: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
-    color: "#333",
-    marginBottom: 4,
+    color: "#024C3F",
+  },
+  weatherSummary: {
+    color: "#607D8B",
+  },
+  weatherMeta: {
+    alignItems: "flex-end",
+    gap: 4,
   },
   weatherTemp: {
-    fontSize: 14,
-    color: "#02685A",
-    marginBottom: 4,
-  },
-  weatherDesc: {
-    fontSize: 14,
-    color: "#666",
-  },
-  statusText: {
-    fontSize: 14,
-    color: "#666",
-    lineHeight: 20,
-  },
-  error: {
     fontSize: 16,
-    color: "#d32f2f",
-    textAlign: "center",
-    marginTop: 40,
+    fontWeight: "700",
+    color: "#02685A",
+  },
+  weatherMetaText: {
+    fontSize: 12,
+    color: "#607D8B",
+  },
+  weatherProvider: {
+    fontSize: 10,
+    color: "#90A4AE",
+    textTransform: "uppercase",
+  },
+  alertCard: {
+    backgroundColor: "#FFF3E0",
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+  },
+  alertTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#BF360C",
+  },
+  alertBody: {
+    fontSize: 13,
+    color: "#5D4037",
+  },
+  alertMeta: {
+    fontSize: 11,
+    color: "#8D6E63",
+  },
+  tagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  tagChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#E8F5E9",
+    borderRadius: 999,
+  },
+  tagChipMuted: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#ECEFF1",
+    borderRadius: 999,
+  },
+  tagText: {
+    color: "#2E7D32",
+    fontWeight: "600",
+  },
+  tagTextMuted: {
+    color: "#546E7A",
+    fontWeight: "600",
+  },
+  primaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: "#02685A",
+  },
+  primaryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#607D8B",
   },
 });
-
