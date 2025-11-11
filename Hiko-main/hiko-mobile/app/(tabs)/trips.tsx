@@ -1,94 +1,122 @@
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from "react-native";
-import { useQuery } from "@tanstack/react-query";
-import { tripService } from "@/lib/services/trip-service";
-import { useAuth } from "@/lib/auth/client";
+import { useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Trip } from "@/lib/types";
+
+import { useAuth } from "@/lib/auth/client";
+import { useTrips } from "@/lib/hooks";
+import type { Trip } from "@/lib/types";
+
+function isUpcomingTrip(trip: Trip) {
+  const now = new Date();
+  return trip.status === "planning" || trip.status === "active" || trip.startDate > now;
+}
 
 export default function TripsScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
 
-  const { data: trips, isLoading } = useQuery({
-    queryKey: ["trips", user?.uid],
-    queryFn: () => (user ? tripService.listTrips(user.uid) : []),
-    enabled: !!user,
-  });
+  const { data: trips = [], isLoading } = useTrips(user?.uid);
 
-  const renderTrip = ({ item }: { item: Trip }) => (
-    <TouchableOpacity
-      onPress={() => router.push(`/trips/${item.id}`)}
-      activeOpacity={0.7}
-      style={styles.tripCard}
-    >
-      <Text style={styles.tripTitle}>{item.title}</Text>
-      <Text style={styles.tripDate}>
-        {new Date(item.startDate).toLocaleDateString()} -{" "}
-        {new Date(item.endDate).toLocaleDateString()}
-      </Text>
-      <View style={styles.tripStatus}>
-        <Text
-          style={[
-            styles.statusBadge,
-            item.status === "active" && styles.statusActive,
-            item.status === "planning" && styles.statusPlanning,
-          ]}
-        >
-          {item.status}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const { upcomingTrips, pastTrips } = useMemo(() => {
+    const upcoming: Trip[] = [];
+    const past: Trip[] = [];
+    trips.forEach((trip) => {
+      if (isUpcomingTrip(trip)) {
+        upcoming.push(trip);
+      } else {
+        past.push(trip);
+      }
+    });
+    return { upcomingTrips: upcoming, pastTrips: past };
+  }, [trips]);
 
   if (!user) {
     return (
-      <View style={styles.container}>
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>Please sign in to view your trips</Text>
-          <TouchableOpacity
-            style={styles.signInButton}
-            onPress={() => router.push("/auth/signin")}
-          >
-            <Text style={styles.signInText}>Sign In</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.centered}>
+        <Ionicons name="trail-sign" size={48} color="#90A4AE" />
+        <Text style={styles.message}>Sign in to see your trips.</Text>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => router.push("/auth/signin")}
+        >
+          <Text style={styles.primaryButtonText}>Sign in</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <Text>Loading trips...</Text>
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#02685A" />
       </View>
     );
   }
 
-  const upcomingTrips = trips?.filter(
-    (t) => t.status === "planning" || t.status === "active"
+  const data = tab === "upcoming" ? upcomingTrips : pastTrips;
+
+  const renderTrip = ({ item }: { item: Trip }) => (
+    <TouchableOpacity
+      onPress={() => router.push(`/trips/${item.id}`)}
+      style={styles.card}
+      activeOpacity={0.8}
+    >
+      <View style={styles.cardHeader}>
+        <Text style={styles.tripTitle}>{item.title}</Text>
+        <View style={[styles.statusBadge, styles[`status_${item.status}` as const]]}>
+          <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+        </View>
+      </View>
+      <Text style={styles.tripDate}>
+        {item.startDate.toLocaleDateString()} – {item.endDate.toLocaleDateString()}
+      </Text>
+      <Text style={styles.tripMeta}>Participants: {item.participants.length}</Text>
+    </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Trips</Text>
+        <Text style={styles.heading}>Trips</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => router.push("/plan")}>
+          <Ionicons name="add" size={18} color="#fff" />
+          <Text style={styles.primaryButtonText}>Plan trip</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.tabRow}>
         <TouchableOpacity
-          style={styles.newTripButton}
-          onPress={() => router.push("/plan")}
+          style={[styles.tabButton, tab === "upcoming" && styles.tabActive]}
+          onPress={() => setTab("upcoming")}
         >
-          <Text style={styles.newTripText}>New Trip</Text>
+          <Text style={[styles.tabText, tab === "upcoming" && styles.tabTextActive]}>Upcoming</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, tab === "past" && styles.tabActive]}
+          onPress={() => setTab("past")}
+        >
+          <Text style={[styles.tabText, tab === "past" && styles.tabTextActive]}>Past</Text>
         </TouchableOpacity>
       </View>
       <FlatList
-        data={upcomingTrips || []}
-        renderItem={renderTrip}
+        data={data}
         keyExtractor={(item) => item.id}
+        renderItem={renderTrip}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>No upcoming trips</Text>
-            <Text style={styles.emptySubtext}>
-              Start planning your next adventure!
+          <View style={styles.centered}>
+            <Ionicons name="calendar-outline" size={36} color="#90A4AE" />
+            <Text style={styles.message}>
+              {tab === "upcoming" ? "No trips planned" : "No past trips yet"}
             </Text>
           </View>
         }
@@ -100,105 +128,131 @@ export default function TripsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "#FAFAFA",
   },
   header: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#02685A",
+  heading: {
+    fontSize: 26,
+    fontWeight: "700",
+    color: "#024C3F",
   },
-  newTripButton: {
+  primaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     backgroundColor: "#02685A",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  primaryButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+  tabRow: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "#E0F2F1",
+    padding: 4,
+    gap: 8,
+  },
+  tabButton: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
     borderRadius: 8,
   },
-  newTripText: {
-    color: "#fff",
-    fontSize: 14,
+  tabActive: {
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  tabText: {
+    color: "#02685A",
     fontWeight: "600",
+  },
+  tabTextActive: {
+    color: "#024C3F",
   },
   list: {
     padding: 16,
+    gap: 12,
   },
-  tripCard: {
+  card: {
     backgroundColor: "#fff",
+    borderRadius: 16,
     padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
+    gap: 6,
     shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   tripTitle: {
     fontSize: 18,
-    fontWeight: "600",
-    color: "#02685A",
-    marginBottom: 4,
+    fontWeight: "700",
+    color: "#024C3F",
+    flex: 1,
+    marginRight: 8,
   },
   tripDate: {
     fontSize: 14,
-    color: "#666",
-    marginBottom: 8,
+    color: "#607D8B",
   },
-  tripStatus: {
-    flexDirection: "row",
+  tripMeta: {
+    fontSize: 12,
+    color: "#90A4AE",
   },
   statusBadge: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
+    borderRadius: 999,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#ECEFF1",
   },
-  statusActive: {
-    color: "#02685A",
-    backgroundColor: "#E6F7F5",
+  statusText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#455A64",
   },
-  statusPlanning: {
-    color: "#F4D03F",
+  status_planning: {
     backgroundColor: "#FFF9E6",
   },
-  empty: {
+  status_active: {
+    backgroundColor: "#E6F7F5",
+  },
+  status_completed: {
+    backgroundColor: "#E8F5E9",
+  },
+  status_cancelled: {
+    backgroundColor: "#FFEBEE",
+  },
+  centered: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#666",
-    marginBottom: 16,
-    textAlign: "center",
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: "#999",
-    textAlign: "center",
-  },
-  signInButton: {
-    backgroundColor: "#02685A",
-    paddingVertical: 12,
+    gap: 12,
     paddingHorizontal: 24,
-    borderRadius: 8,
-    marginTop: 16,
   },
-  signInText: {
-    color: "#fff",
+  message: {
+    color: "#607D8B",
     fontSize: 16,
-    fontWeight: "600",
+    textAlign: "center",
   },
 });

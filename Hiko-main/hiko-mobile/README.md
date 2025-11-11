@@ -4,22 +4,22 @@ A native mobile app for planning hiking trips in New Zealand, built with Expo an
 
 ## Features
 
-- 🗺️ **Explore Trails**: Discover hiking tracks with interactive maps
-- 🌤️ **Live Weather**: Real-time weather forecasts for trail safety
-- 👥 **Social Planning**: Plan trips with friends and coordinate gear
-- 📍 **GPS Tracking**: Track your hikes (beta)
-- 🏕️ **DOC Integration**: Official track status and hut information
-- 📱 **Native Mobile**: Built with Expo for iOS and Android
+- 🗺️ **Explore Tracks**: Browse DoC tracks on interactive MapLibre maps with rich filters.
+- 🌤️ **Weather at a Glance**: Three-day forecast with MMKV-backed caching and provider attribution.
+- 🚨 **Official Alerts**: View Department of Conservation alerts alongside live status summaries.
+- 🧭 **Trip Planning**: Create multi-day trips, invite friends, and coordinate shared gear checklists.
+- 🔒 **Offline Ready**: Persists trips, routes, and cached forecasts locally for offline reference.
 
 ## Tech Stack
 
-- **Framework**: Expo ~54.0.7
+- **Framework**: Expo ~54.0.7 (managed)
 - **Language**: TypeScript
 - **Navigation**: Expo Router
-- **State**: TanStack Query
-- **Backend**: Firebase (Auth, Firestore, Storage)
-- **Maps**: React Native Maps
-- **Location**: Expo Location
+- **Data**: TanStack Query + custom MMKV persistence
+- **State**: Zustand for lightweight UI state
+- **Backend**: Firebase (Auth, Firestore, Storage, Functions)
+- **Maps**: `react-native-maplibre-gl`
+- **Location**: `expo-location`
 
 ## Quick Start
 
@@ -48,9 +48,9 @@ EXPO_PUBLIC_FIREBASE_API_KEY=your-key
 EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
 EXPO_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
 EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your-sender-id
 EXPO_PUBLIC_FIREBASE_APP_ID=your-app-id
-EXPO_PUBLIC_MAPBOX_TOKEN=your-mapbox-token
+EXPO_PUBLIC_MAP_TOKEN=your-maplibre-token
+EXPO_PUBLIC_FEATURE_DOC=true
 ```
 
 3. **Start the development server:**
@@ -71,32 +71,33 @@ npm run web      # Web browser
 
 ```
 hiko-mobile/
-├── app/                    # Expo Router pages
-│   ├── (tabs)/            # Tab navigation screens
-│   │   ├── index.tsx      # Home
-│   │   ├── explore.tsx    # Explore trails
-│   │   ├── trips.tsx     # User trips
-│   │   └── profile.tsx   # User profile
-│   ├── hikes/[id].tsx    # Hike details
-│   ├── trips/[id].tsx    # Trip details
-│   ├── plan.tsx          # Trip planner
-│   └── auth/signin.tsx   # Authentication
-├── lib/                  # Core libraries
-│   ├── firebase/        # Firebase config
-│   ├── services/        # Business logic
-│   ├── auth/           # Authentication
-│   ├── types/          # TypeScript types
-│   └── schemas/        # Zod schemas
-└── assets/             # Images, icons
+├── app/                      # Expo Router pages
+│   ├── _layout.tsx           # Global providers (TanStack Query, SafeArea)
+│   ├── (tabs)/               # Tab navigation (Home, Explore, Trips, Profile)
+│   ├── hikes/[id].tsx        # Hike details with map + weather + alerts
+│   ├── trips/[id].tsx        # Trip overview with offline cache badge
+│   ├── plan.tsx              # Trip planner flow
+│   └── auth/                 # Authentication modals
+├── components/               # Reusable UI primitives
+├── lib/
+│   ├── auth/                 # Firebase auth helpers
+│   ├── hooks/                # React Query hooks
+│   ├── map/                  # MapLibre abstractions
+│   ├── schemas/              # Shared Zod schemas
+│   ├── services/             # Firestore/Weather service modules
+│   ├── storage/              # MMKV adapters & persisters
+│   └── store/                # Zustand stores
+├── tests/                    # Vitest suites
+└── assets/                   # Images, fonts
 ```
 
 ## Development
 
 ### Running on Device
 
-1. Install Expo Go app on your phone
-2. Run `npm start`
-3. Scan QR code with Expo Go (iOS) or Camera app (Android)
+1. Install the Expo Go app on your device.
+2. Run `npm start` to launch Metro.
+3. Scan the QR code with Expo Go (iOS) or the Camera app (Android).
 
 ### Building for Production
 
@@ -104,24 +105,19 @@ hiko-mobile/
 # Install EAS CLI
 npm install -g eas-cli
 
-# Configure EAS
+# Configure the project
 eas build:configure
 
-# Build for iOS
+# Build binaries
 eas build --platform ios
-
-# Build for Android
 eas build --platform android
 ```
 
-## Testing
+## Testing & Quality
 
-The app will run with mock data if Firebase isn't configured. You can:
-- View all screens and navigation
-- Test UI components
-- See the app structure
-
-For full functionality, configure Firebase credentials.
+- `npm run lint` – ESLint with Expo + Prettier config
+- `npm run test` – Vitest (includes weather + normaliser suites)
+- Git hooks run the same commands on `pre-commit`
 
 ## Environment Variables
 

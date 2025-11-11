@@ -1,145 +1,91 @@
-// User Types
-export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
+import type {
+  CampsiteDoc,
+  DocAlertDoc,
+  HikeDoc,
+  HikeFilters,
+  HutDoc,
+  TripDoc,
+  UserDoc,
+} from "@/lib/schemas";
 
-export interface User {
+export type ExperienceLevel = UserDoc["experienceLevel"];
+export type Difficulty = NonNullable<HikeDoc["difficulty"]>;
+export type HikeStatus = NonNullable<HikeDoc["statusSummary"]>;
+export type TripStatus = TripDoc["status"];
+export type AlertSeverity = NonNullable<DocAlertDoc["severity"]>;
+
+export type LatLng = HikeDoc["start"];
+
+export interface Hike extends HikeDoc {
   id: string;
-  name: string;
-  email: string;
-  photoUrl?: string;
-  bio?: string;
-  experienceLevel?: ExperienceLevel;
-  gearOwned?: string[];
-  friends: string[];
-  createdAt: Date;
-  updatedAt: Date;
 }
 
-// Hike Types
-export type Difficulty = "easy" | "moderate" | "hard";
-export type TrackStatus = "open" | "caution" | "closed" | "unknown";
-
-export interface Hike {
+export interface Hut extends HutDoc {
   id: string;
-  name: string;
-  region: string;
-  startLatLng: { lat: number; lng: number };
-  endLatLng?: { lat: number; lng: number };
-  distanceKm: number;
-  elevationGainM?: number;
-  difficulty: Difficulty;
-  features: string[];
-  overnight: boolean;
-  tags: string[];
-  docTrackId?: string;
-  mapPreviewTileUrl?: string;
-  geojsonPath?: string;
-  statusSummary?: TrackStatus;
-  lastOfficialStatusAt?: Date;
-  lastUserStatusAt?: Date;
 }
 
-// Hut Types
-export interface Hut {
+export interface Campsite extends CampsiteDoc {
   id: string;
-  name: string;
-  locationLatLng: { lat: number; lng: number };
-  capacity?: number;
-  facilities?: string[];
-  bookingUrl?: string;
-  docHutId?: string;
 }
 
-// Trip Types
-export type TripStatus = "planning" | "active" | "completed" | "cancelled";
-
-export interface Trip {
+export interface DocAlert extends DocAlertDoc {
   id: string;
-  hikeId: string;
-  createdBy: string;
-  title: string;
-  startDate: Date;
-  endDate: Date;
-  participants: string[];
-  gearNeeded: string[];
-  status: TripStatus;
-  isOvernight: boolean;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
-// Trip Message Types
-export interface TripMessage {
+export interface Trip extends TripDoc {
   id: string;
-  tripId: string;
-  userId: string;
-  message: string;
-  createdAt: Date;
 }
 
-// Track Status Report Types
-export type StatusReportType = "official" | "user";
-export type StatusSource = "DOC" | "user";
-
-export interface TrackStatusReport {
+export interface UserProfile extends UserDoc {
   id: string;
-  hikeId: string;
-  type: StatusReportType;
-  summary: string;
-  conditions?: string[];
-  hazards?: string[];
-  source?: StatusSource;
-  createdBy?: string;
-  createdAt: Date;
+  savedHikes?: string[];
 }
 
-// Weather Types
-export interface WeatherForecast {
-  date: Date;
-  tempMin: number;
-  tempMax: number;
-  condition: string;
-  description: string;
-  windSpeed?: number;
-  windDirection?: number;
-  precipitation?: number;
-  humidity?: number;
-}
-
-export interface WeatherCache {
-  id: string;
-  hikeId: string;
-  forecastJson: WeatherForecast[];
-  provider: string;
-  fetchedAt: Date;
-  ttl: Date;
-}
-
-// Feature Flags
-export interface FeatureFlags {
-  FEATURE_DOC: boolean;
-  FEATURE_CHAT: boolean;
-  FEATURE_GPS_EXPERIMENTAL: boolean;
-  FEATURE_RENTALS_STUB: boolean;
-}
-
-// Filter Types
-export interface HikeFilters {
-  difficulty?: Difficulty[];
-  maxDistance?: number;
-  maxDrivingTime?: number;
-  features?: string[];
-  overnight?: boolean;
-  region?: string;
-  search?: string;
-}
-
-// Service Input Types
 export interface CreateTripInput {
   hikeId: string;
   title: string;
   startDate: Date;
   endDate: Date;
   participants: string[];
-  gearNeeded?: string[];
+  gearNeeded: string[];
   isOvernight: boolean;
+}
+
+export interface UpdateTripInput {
+  title?: string;
+  startDate?: Date;
+  endDate?: Date;
+  participants?: string[];
+  gearNeeded?: string[];
+  status?: TripStatus;
+}
+
+export type { HikeFilters };
+
+export interface WeatherForecastDay {
+  date: string;
+  summary: string;
+  tempMax: number;
+  tempMin: number;
+  windKph?: number;
+  precipMm?: number;
+  icon?: string;
+  provider: "metservice" | "openweathermap";
+  lastUpdated: string;
+}
+
+export interface WeatherCacheEntry {
+  hikeId: string;
+  lat: number;
+  lng: number;
+  data: WeatherForecastDay[];
+  expiresAt: number;
+}
+
+export interface OfflineTripCache {
+  trip: Trip;
+  hike: Hike;
+  routeGeoJson?: string;
+  weather?: WeatherForecastDay[];
+  cachedAt: number;
 }

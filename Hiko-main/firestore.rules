@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function authed() { return request.auth != null; }
+    function isOwner(resourceId) { return request.auth != null && request.auth.uid == resourceId; }
+
+    match /users/{uid} {
+      allow create: if authed() && isOwner(uid);
+      allow read, update: if authed() && isOwner(uid);
+    }
+
+    match /hikes/{id} { allow read: if true; allow write: if false; }
+    match /huts/{id} { allow read: if true; allow write: if false; }
+    match /campsites/{id} { allow read: if true; allow write: if false; }
+
+    match /docAlerts/{id} { allow read: if true; allow write: if false; }
+
+    match /trips/{id} {
+      allow create: if authed() && request.resource.data.createdBy == request.auth.uid;
+      allow read, update, delete: if authed() &&
+        (resource.data.createdBy == request.auth.uid ||
+         request.auth.uid in resource.data.participants);
+    }
+  }
+}
