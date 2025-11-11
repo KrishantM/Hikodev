@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Hiko",
+    "slug": "hiko-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#02685A"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.hiko.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Hiko needs your location to show nearby trails and enable GPS tracking during hikes.",
+        "NSLocationAlwaysUsageDescription": "Hiko needs your location for GPS tracking during hikes."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#02685A"
+      },
+      "package": "com.hiko.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Hiko to use your location for GPS tracking during hikes."
+        }
+      ]
+    ],
+    "scheme": "hiko",
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
+  }
+}
